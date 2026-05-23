@@ -1,0 +1,38 @@
+[
+    {
+        "name": "Text Intelligence API",
+        "description": "API oficial para respuestas inteligentes de texto en apps, webs, sistemas y plataformas empresariales.",
+        "endpoint": "/api/texto-app",
+        "price": "S/20",
+        "product_id": "centeno_api_starter",
+        "type": "texto",
+        "status": "activa"
+    },
+    {
+        "name": "Image Generation API",
+        "description": "API para generar imágenes con inteligencia artificial desde prompts de texto.",
+        "endpoint": "/api/imagen",
+        "price": "S/50",
+        "product_id": "centeno_api_developer",
+        "type": "imagen",
+        "status": "activa"
+    },
+    {
+        "name": "User Sync API",
+        "description": "API para sincronizar usuarios, planes, estados, fechas de vencimiento y accesos.",
+        "endpoint": "/api/usuario/sync",
+        "price": "S/100",
+        "product_id": "centeno_api_business",
+        "type": "business",
+        "status": "activa"
+    },
+    {
+        "name": "History API",
+        "description": "API para consultar historial de usuarios, conversaciones, respuestas e imágenes.",
+        "endpoint": "/api/historial",
+        "price": "S/100",
+        "product_id": "centeno_api_business",
+        "type": "business",
+        "status": "activa"
+    }
+]
