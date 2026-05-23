@@ -2,40 +2,70 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 import os
 import json
+import uuid
 import uvicorn
+from datetime import datetime, timedelta
 from urllib.parse import parse_qs
 
 app = FastAPI(
     title="AMERICO AI",
     description="AMERICO AI WEB PRO ADMIN - CENTENO AI API Platform",
-    version="3.1.0"
+    version="4.2.0"
 )
 
-SITE_URL = os.getenv("SITE_URL", "http://127.0.0.1:8000")
+SITE_URL = os.getenv("SITE_URL", "https://americo-ai-web.onrender.com")
+APP_LINK = os.getenv("APP_LINK", "centenoai://open")
 
-APP_LINK = os.getenv("APP_LINK", "#centeno")
 WHATSAPP_LINK = "https://wa.me/51905917699"
 MAIN_EMAIL = "centenocolqueg@gmail.com"
 FOUNDER = "G. Americo Centeno Colque"
 COMPANY = "AMERICO AI"
 PRODUCT = "CENTENO AI"
-API_BASE_URL = "https://mis-apis-americo.onrender.com"
+API_BASE_URL = os.getenv("API_BASE_URL", "https://mis-apis-americo-jm2e.onrender.com")
 
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "centenocolqueg@gmail.com")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123456")
 ADMIN_SESSION = os.getenv("ADMIN_SESSION", "americo_ai_admin_session_2026")
 
 APIS_FILE = "apis.json"
+API_KEYS_FILE = "api_keys.json"
 
 COMPANY_HTML = '<span class="notranslate" translate="no">AMERICO AI</span>'
 PRODUCT_HTML = '<span class="notranslate" translate="no">CENTENO AI</span>'
+
+API_KEY_PLANS = {
+    "centeno_api_starter": {
+        "name": "API Starter",
+        "price": "S/20",
+        "days": 30,
+        "limit": 1000
+    },
+    "centeno_api_developer": {
+        "name": "API Developer",
+        "price": "S/50",
+        "days": 30,
+        "limit": 5000
+    },
+    "centeno_api_business": {
+        "name": "API Business",
+        "price": "S/100",
+        "days": 30,
+        "limit": 20000
+    },
+    "centeno_api_enterprise": {
+        "name": "API Enterprise",
+        "price": "Custom",
+        "days": 30,
+        "limit": 100000
+    }
+}
 
 
 def default_apis():
     return [
         {
             "name": "Text Intelligence API",
-            "description": "API oficial para respuestas inteligentes de texto en apps, webs, sistemas y plataformas empresariales.",
+            "description": "API oficial para respuestas inteligentes de texto en apps, webs, bots y sistemas empresariales.",
             "endpoint": "/api/texto-app",
             "price": "S/20",
             "product_id": "centeno_api_starter",
@@ -53,7 +83,7 @@ def default_apis():
         },
         {
             "name": "User Sync API",
-            "description": "API para sincronizar usuarios, planes, estados, fechas de vencimiento y accesos.",
+            "description": "API para sincronizar usuarios, planes, estados, vencimientos y accesos.",
             "endpoint": "/api/usuario/sync",
             "price": "S/100",
             "product_id": "centeno_api_business",
@@ -91,8 +121,77 @@ def save_apis(apis):
         json.dump(apis, f, indent=4, ensure_ascii=False)
 
 
+def load_api_keys():
+    if not os.path.exists(API_KEYS_FILE):
+        save_api_keys([])
+
+    try:
+        with open(API_KEYS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                return data
+            return []
+    except Exception:
+        return []
+
+
+def save_api_keys(keys):
+    with open(API_KEYS_FILE, "w", encoding="utf-8") as f:
+        json.dump(keys, f, indent=4, ensure_ascii=False)
+
+
 def is_admin(request: Request):
     return request.cookies.get("admin_session") == ADMIN_SESSION
+
+
+def generate_real_api_key():
+    return "americo_sk_" + uuid.uuid4().hex + uuid.uuid4().hex[:16]
+
+
+def now_iso():
+    return datetime.utcnow().isoformat() + "Z"
+
+
+def add_days_iso(days: int):
+    return (datetime.utcnow() + timedelta(days=days)).isoformat() + "Z"
+
+
+def is_key_active(key_data):
+    if key_data.get("status") != "active":
+        return False
+
+    expires_at = key_data.get("expires_at", "")
+    if not expires_at:
+        return False
+
+    try:
+        expires_clean = expires_at.replace("Z", "")
+        return datetime.utcnow() < datetime.fromisoformat(expires_clean)
+    except Exception:
+        return False
+
+
+def verify_real_api_key(api_key: str):
+    keys = load_api_keys()
+
+    for item in keys:
+        if item.get("api_key") == api_key:
+            if not is_key_active(item):
+                return False, "API Key vencida o inactiva", None
+
+            limit = int(item.get("monthly_limit", 0))
+            used = int(item.get("used", 0))
+
+            if used >= limit:
+                return False, "Límite mensual agotado", item
+
+            item["used"] = used + 1
+            item["updated_at"] = now_iso()
+            save_api_keys(keys)
+
+            return True, "API Key válida", item
+
+    return False, "API Key no encontrada", None
 
 
 def page_style():
@@ -105,8 +204,8 @@ def page_style():
 
       body {
         margin: 0;
-        font-family: Arial, Helvetica, sans-serif;
-        background: #050816;
+        font-family: Inter, Arial, Helvetica, sans-serif;
+        background: #030712;
         color: white;
         overflow-x: hidden;
       }
@@ -119,8 +218,8 @@ def page_style():
         position: sticky;
         top: 0;
         z-index: 50;
-        background: rgba(5, 8, 22, 0.94);
-        backdrop-filter: blur(14px);
+        background: rgba(3, 7, 18, 0.94);
+        backdrop-filter: blur(18px);
         border-bottom: 1px solid rgba(255,255,255,0.08);
         padding: 16px 8%;
         display: flex;
@@ -129,9 +228,9 @@ def page_style():
       }
 
       .logo {
-        font-size: 22px;
-        font-weight: 900;
-        letter-spacing: 1px;
+        font-size: 24px;
+        font-weight: 950;
+        letter-spacing: 2px;
       }
 
       nav a {
@@ -139,11 +238,11 @@ def page_style():
         text-decoration: none;
         margin-left: 18px;
         font-size: 14px;
-        font-weight: 700;
+        font-weight: 800;
       }
 
       nav a:hover {
-        color: #8affd2;
+        color: #d4af37;
       }
 
       header {
@@ -154,22 +253,22 @@ def page_style():
         align-items: center;
         gap: 45px;
         background:
-          radial-gradient(circle at 20% 20%, rgba(124,92,255,0.48), transparent 34%),
-          radial-gradient(circle at 80% 30%, rgba(0,212,255,0.26), transparent 32%),
-          radial-gradient(circle at 50% 90%, rgba(168,85,247,0.18), transparent 38%),
-          #050816;
+          radial-gradient(circle at 20% 20%, rgba(212,175,55,0.22), transparent 30%),
+          radial-gradient(circle at 80% 30%, rgba(59,130,246,0.18), transparent 34%),
+          radial-gradient(circle at 50% 90%, rgba(168,85,247,0.14), transparent 38%),
+          #030712;
       }
 
       .badge {
         display: inline-block;
         padding: 10px 16px;
         border-radius: 999px;
-        background: rgba(124,92,255,0.16);
-        border: 1px solid rgba(124,92,255,0.45);
-        color: #b9a8ff;
-        font-weight: bold;
+        background: rgba(212,175,55,0.13);
+        border: 1px solid rgba(212,175,55,0.45);
+        color: #f8df7a;
+        font-weight: 900;
         margin-bottom: 22px;
-        letter-spacing: 1px;
+        letter-spacing: 1.2px;
         font-size: 13px;
       }
 
@@ -181,10 +280,10 @@ def page_style():
       }
 
       h2 {
-        font-size: clamp(30px, 5vw, 52px);
+        font-size: clamp(32px, 5vw, 56px);
         margin-bottom: 14px;
-        color: #9bb6ff;
-        letter-spacing: -1px;
+        color: #f7f7fb;
+        letter-spacing: -1.5px;
       }
 
       h3 {
@@ -199,17 +298,18 @@ def page_style():
       }
 
       .gradient {
-        background: linear-gradient(90deg, #8affd2, #8ab4ff, #b66dff);
+        background: linear-gradient(90deg, #d4af37, #8affd2, #8ab4ff);
         -webkit-background-clip: text;
         color: transparent;
       }
 
       .slogan {
         font-size: 23px;
-        color: #8affd2;
+        color: #d4af37;
         margin: 18px 0;
         max-width: 900px;
-        font-weight: 900;
+        font-weight: 950;
+        letter-spacing: 1px;
       }
 
       .hero-text {
@@ -221,41 +321,44 @@ def page_style():
         display: inline-block;
         margin: 10px 8px 10px 0;
         padding: 15px 24px;
-        border-radius: 14px;
-        background: linear-gradient(90deg, #675cff, #a855f7);
-        color: white;
+        border-radius: 16px;
+        background: linear-gradient(90deg, #d4af37, #f59e0b);
+        color: #030712;
         text-decoration: none;
-        font-weight: bold;
-        box-shadow: 0 12px 30px rgba(124,92,255,0.30);
+        font-weight: 950;
+        box-shadow: 0 14px 35px rgba(212,175,55,0.22);
         border: none;
         cursor: pointer;
       }
 
       .btn.secondary {
         background: rgba(255,255,255,0.08);
+        color: white;
         border: 1px solid rgba(255,255,255,0.16);
         box-shadow: none;
       }
 
       .btn.green {
         background: linear-gradient(90deg, #10b981, #06b6d4);
+        color: white;
       }
 
       .btn.red {
         background: linear-gradient(90deg, #ef4444, #f97316);
+        color: white;
       }
 
       .hero-card {
-        background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.03));
+        background: linear-gradient(180deg, rgba(255,255,255,0.11), rgba(255,255,255,0.03));
         border: 1px solid rgba(255,255,255,0.14);
-        border-radius: 30px;
+        border-radius: 34px;
         padding: 28px;
-        box-shadow: 0 0 65px rgba(124,92,255,0.22);
+        box-shadow: 0 0 80px rgba(212,175,55,0.12);
       }
 
       .terminal {
         background: #07111f;
-        border-radius: 20px;
+        border-radius: 24px;
         padding: 24px;
         color: #8affd2;
         font-family: Consolas, monospace;
@@ -285,24 +388,24 @@ def page_style():
       .card {
         background: rgba(255,255,255,0.06);
         border: 1px solid rgba(255,255,255,0.14);
-        border-radius: 24px;
+        border-radius: 28px;
         padding: 26px;
-        box-shadow: 0 0 35px rgba(124,92,255,0.14);
+        box-shadow: 0 0 35px rgba(124,92,255,0.10);
       }
 
       .highlight {
-        background: linear-gradient(180deg, rgba(124,92,255,0.22), rgba(0,212,255,0.08));
-        border: 1px solid rgba(124,92,255,0.45);
+        background: linear-gradient(180deg, rgba(212,175,55,0.16), rgba(59,130,246,0.07));
+        border: 1px solid rgba(212,175,55,0.38);
       }
 
       .success {
-        background: linear-gradient(180deg, rgba(16,185,129,0.20), rgba(6,182,212,0.08));
+        background: linear-gradient(180deg, rgba(16,185,129,0.18), rgba(6,182,212,0.08));
         border: 1px solid rgba(16,185,129,0.45);
       }
 
       .price {
         font-size: 34px;
-        font-weight: bold;
+        font-weight: 950;
         color: white;
         margin: 10px 0;
       }
@@ -310,7 +413,7 @@ def page_style():
       code {
         display: block;
         padding: 14px;
-        border-radius: 12px;
+        border-radius: 14px;
         background: #0b1220;
         color: #8affd2;
         overflow-x: auto;
@@ -323,17 +426,17 @@ def page_style():
         display: inline-block;
         padding: 6px 10px;
         border-radius: 999px;
-        background: rgba(138,255,210,0.12);
-        color: #8affd2;
+        background: rgba(212,175,55,0.13);
+        color: #f8df7a;
         font-size: 12px;
-        font-weight: bold;
+        font-weight: 950;
         margin-bottom: 12px;
       }
 
       .form-box {
         background: rgba(255,255,255,0.06);
         border: 1px solid rgba(255,255,255,0.14);
-        border-radius: 24px;
+        border-radius: 26px;
         padding: 26px;
         max-width: 780px;
       }
@@ -342,7 +445,7 @@ def page_style():
         width: 100%;
         margin: 8px 0 16px;
         padding: 14px;
-        border-radius: 12px;
+        border-radius: 14px;
         border: 1px solid rgba(255,255,255,0.18);
         background: #0b1220;
         color: white;
@@ -350,8 +453,31 @@ def page_style():
       }
 
       label {
-        font-weight: bold;
+        font-weight: 900;
         color: #d9ddff;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+        background: rgba(255,255,255,0.04);
+        border-radius: 20px;
+        overflow: hidden;
+      }
+
+      th, td {
+        padding: 14px;
+        border-bottom: 1px solid rgba(255,255,255,0.10);
+        color: #d9ddff;
+        text-align: left;
+        vertical-align: top;
+        font-size: 14px;
+      }
+
+      th {
+        color: #f8df7a;
+        font-weight: 950;
       }
 
       footer {
@@ -388,7 +514,11 @@ def page_style():
 
 
 def nav_html(admin=False):
-    extra = '<a href="/admin">Admin</a> <a href="/admin/logout">Salir</a>' if admin else ''
+    if admin:
+        extra = '<a href="/admin">Admin</a> <a href="/admin/api-keys">API Keys reales</a> <a href="/admin/logout">Salir</a>'
+    else:
+        extra = '<a href="/admin/login">Admin</a>'
+
     return f"""
     <nav>
       <div class="logo">{COMPANY_HTML}</div>
@@ -432,7 +562,7 @@ def render_api_cards():
           <p><strong>Precio:</strong> {price}</p>
           <p><strong>Product ID Google Billing:</strong> {product_id}</p>
           <p><strong>Authentication:</strong> x-api-key</p>
-          <a class="btn" href="{APP_LINK}">Get API Key in {PRODUCT_HTML}</a>
+          <a class="btn" href="{APP_LINK}">Abrir app y obtener API Key</a>
         </div>
         """
 
@@ -457,7 +587,7 @@ def home():
   <meta name="google" content="notranslate">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AMERICO AI | CENTENO AI | API Keys with Google Play Billing</title>
-  <meta name="description" content="AMERICO AI builds artificial intelligence products, CENTENO AI, API Keys, AI chat, image generation, developer APIs and enterprise automation.">
+  <meta name="description" content="AMERICO AI builds CENTENO AI, AI apps, API Keys, AI chat, image generation, developer APIs and enterprise automation.">
   <meta name="keywords" content="AMERICO AI, CENTENO AI, AI API, API Key, Google Play Billing, artificial intelligence, image generation, automation, developer API">
   <meta name="author" content="{FOUNDER}">
   <meta name="robots" content="index, follow">
@@ -477,7 +607,7 @@ def home():
       {COMPANY_HTML} builds artificial intelligence products, API platforms, automation systems,
       AI assistants, image generation tools and developer solutions for people, businesses and creators.
     </p>
-    <a class="btn" href="{APP_LINK}">Open {PRODUCT_HTML}</a>
+    <a class="btn" href="{APP_LINK}">Open {PRODUCT_HTML} App</a>
     <a class="btn secondary" href="#api">Explore API Platform</a>
     <a class="btn secondary" href="{APP_LINK}">Get API Key</a>
   </div>
@@ -489,8 +619,9 @@ def home():
       &gt; Text Intelligence API active<br>
       &gt; Image Generation API active<br>
       &gt; Google Play Billing prepared<br>
-      &gt; API Key plans inside <span class="notranslate" translate="no">CENTENO AI</span><br>
+      &gt; API Key generator active<br>
       &gt; Admin API registry enabled<br>
+      &gt; App deep link active: centenoai://open<br>
       &gt; Founder & CEO: {FOUNDER}
     </div>
   </div>
@@ -556,7 +687,7 @@ def home():
   <div class="grid">
     <div class="card">
       <h3>Step 1 — Open {PRODUCT_HTML}</h3>
-      <p>Open the official Android app.</p>
+      <p>Open the official Android app from this website using the secure app link.</p>
       <a class="btn" href="{APP_LINK}">Open {PRODUCT_HTML}</a>
     </div>
 
@@ -666,6 +797,142 @@ def home():
 """
 
 
+@app.get("/open-app")
+def open_app():
+    return RedirectResponse(APP_LINK, status_code=302)
+
+
+@app.post("/api/key/activar")
+async def activar_api_key(request: Request):
+    try:
+        data = await request.json()
+    except Exception:
+        return {"ok": False, "error": "JSON inválido"}
+
+    email = str(data.get("email", "")).strip().lower()
+    product_id = str(data.get("product_id", "")).strip()
+    purchase_token = str(data.get("purchase_token", "")).strip()
+
+    if not email or "@" not in email:
+        return {"ok": False, "error": "Correo inválido"}
+
+    if product_id not in API_KEY_PLANS:
+        return {"ok": False, "error": "Plan API Key inválido"}
+
+    plan = API_KEY_PLANS[product_id]
+    keys = load_api_keys()
+
+    existing = None
+
+    for item in keys:
+        if (
+            item.get("email", "").lower() == email
+            and item.get("product_id") == product_id
+            and item.get("status") == "active"
+        ):
+            existing = item
+            break
+
+    if existing:
+        existing["expires_at"] = add_days_iso(plan["days"])
+        existing["updated_at"] = now_iso()
+        existing["purchase_token"] = purchase_token
+        api_key = existing["api_key"]
+    else:
+        api_key = generate_real_api_key()
+
+        keys.append({
+            "email": email,
+            "api_key": api_key,
+            "product_id": product_id,
+            "plan_name": plan["name"],
+            "price": plan["price"],
+            "monthly_limit": plan["limit"],
+            "used": 0,
+            "status": "active",
+            "purchase_token": purchase_token,
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+            "expires_at": add_days_iso(plan["days"])
+        })
+
+    save_api_keys(keys)
+
+    return {
+        "ok": True,
+        "message": "API Key activada correctamente",
+        "email": email,
+        "product_id": product_id,
+        "plan_name": plan["name"],
+        "api_key": api_key,
+        "monthly_limit": plan["limit"],
+        "expires_at": add_days_iso(plan["days"])
+    }
+
+
+@app.get("/api/key/mis-keys")
+def mis_api_keys(email: str):
+    email = email.strip().lower()
+    keys = load_api_keys()
+
+    user_keys = []
+
+    for item in keys:
+        if item.get("email", "").lower() == email:
+            safe_item = dict(item)
+            safe_item["active"] = is_key_active(item)
+            user_keys.append(safe_item)
+
+    return {
+        "ok": True,
+        "email": email,
+        "total": len(user_keys),
+        "keys": user_keys
+    }
+
+
+@app.get("/api/key/admin/todas")
+def todas_api_keys(request: Request):
+    if not is_admin(request):
+        return {"ok": False, "error": "No autorizado"}
+
+    keys = load_api_keys()
+
+    return {
+        "ok": True,
+        "total": len(keys),
+        "keys": keys
+    }
+
+
+@app.get("/api/key/probar")
+def probar_api_key(request: Request):
+    api_key = request.headers.get("x-api-key", "").strip()
+
+    if not api_key:
+        return {
+            "ok": False,
+            "error": "Falta header x-api-key"
+        }
+
+    valid, message, data = verify_real_api_key(api_key)
+
+    if not valid:
+        return {
+            "ok": False,
+            "error": message
+        }
+
+    return {
+        "ok": True,
+        "message": message,
+        "email": data.get("email"),
+        "plan": data.get("plan_name"),
+        "used": data.get("used"),
+        "monthly_limit": data.get("monthly_limit")
+    }
+
+
 @app.get("/admin/login", response_class=HTMLResponse)
 def admin_login_page():
     return f"""
@@ -696,7 +963,7 @@ def admin_login_page():
 
     <p style="margin-top:20px;color:#9bb6ff;">
       En local la contraseña temporal es: <strong>admin123456</strong><br>
-      En Render debes configurar ADMIN_PASSWORD.
+      En Render puedes configurar ADMIN_PASSWORD.
     </p>
   </div>
 </section>
@@ -780,12 +1047,92 @@ def admin_panel(request: Request):
   </p>
 
   <a class="btn green" href="/admin/apis/new">Agregar nueva API</a>
+  <a class="btn secondary" href="/admin/api-keys">Ver API Keys reales</a>
   <a class="btn secondary" href="/">Ver página pública</a>
   <a class="btn red" href="/admin/logout">Cerrar sesión</a>
 
   <div class="grid">
     {rows}
   </div>
+</section>
+
+</body>
+</html>
+"""
+
+
+@app.get("/admin/api-keys", response_class=HTMLResponse)
+def admin_api_keys_page(request: Request):
+    if not is_admin(request):
+        return RedirectResponse("/admin/login", status_code=302)
+
+    keys = load_api_keys()
+
+    rows = ""
+
+    if not keys:
+        rows = """
+        <tr>
+          <td colspan="8">Todavía no hay API Keys generadas.</td>
+        </tr>
+        """
+    else:
+        for item in keys:
+            active = "ACTIVA" if is_key_active(item) else "INACTIVA/VENCIDA"
+            api_key = item.get("api_key", "")
+            api_key_short = api_key[:22] + "..." if len(api_key) > 22 else api_key
+
+            rows += f"""
+            <tr>
+              <td>{item.get("email", "")}</td>
+              <td>{item.get("plan_name", "")}</td>
+              <td>{item.get("product_id", "")}</td>
+              <td>{api_key_short}</td>
+              <td>{item.get("used", 0)} / {item.get("monthly_limit", 0)}</td>
+              <td>{active}</td>
+              <td>{item.get("expires_at", "")}</td>
+              <td>{item.get("created_at", "")}</td>
+            </tr>
+            """
+
+    return f"""
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>API Keys Reales | AMERICO AI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  {page_style()}
+</head>
+<body>
+{nav_html(admin=True)}
+
+<section>
+  <h2>API Keys Reales</h2>
+  <p class="section-subtitle">
+    Aquí aparecen las claves reales generadas cuando un usuario compra o activa un plan API Key.
+  </p>
+
+  <a class="btn secondary" href="/admin">Volver al admin</a>
+  <a class="btn secondary" href="/api/key/admin/todas">Ver JSON</a>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Email</th>
+        <th>Plan</th>
+        <th>Product ID</th>
+        <th>API Key</th>
+        <th>Uso</th>
+        <th>Estado</th>
+        <th>Vence</th>
+        <th>Creada</th>
+      </tr>
+    </thead>
+    <tbody>
+      {rows}
+    </tbody>
+  </table>
 </section>
 
 </body>
@@ -937,7 +1284,6 @@ def terms():
           generación de imágenes, productividad, programación, automatización, análisis de información,
           apoyo tecnológico y acceso a API Keys para desarrolladores o empresas.
         </p>
-        <p>El fundador y CEO de {COMPANY_HTML} es <strong>{FOUNDER}</strong>.</p>
 
         <h3>1. Uso de la aplicación</h3>
         <p>El usuario acepta usar {PRODUCT_HTML} de forma legal, responsable y respetuosa.</p>
@@ -946,11 +1292,6 @@ def terms():
         <p>
           {PRODUCT_HTML} puede ofrecer planes gratuitos, planes premium y planes de API Key.
           Los pagos dentro de la aplicación se procesan mediante <strong>Google Play Billing</strong>.
-        </p>
-        <p>
-          Las API Keys se compran, activan y administran dentro de {PRODUCT_HTML}.
-          Después de activar una API Key, el usuario puede usarla en sus propias aplicaciones,
-          páginas web o sistemas empresariales conforme a los límites del plan.
         </p>
 
         <h3>3. Uso de APIs</h3>
@@ -1075,11 +1416,17 @@ def health():
         "status": "online",
         "project": "AMERICO AI WEB PRO ADMIN",
         "product": "CENTENO AI",
+        "app_link": APP_LINK,
         "api_key_access": "inside_centeno_ai_with_google_play_billing",
+        "api_key_generator": "active",
         "api_base_url": API_BASE_URL,
-        "admin_panel": "/admin"
+        "admin_panel": "/admin",
+        "admin_api_keys_panel": "/admin/api-keys",
+        "my_keys_endpoint": "/api/key/mis-keys?email=correo@gmail.com",
+        "activate_key_endpoint": "/api/key/activar"
     }
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
