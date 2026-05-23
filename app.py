@@ -10,7 +10,7 @@ from urllib.parse import parse_qs
 app = FastAPI(
     title="AMERICO AI",
     description="AMERICO AI WEB PRO ADMIN - CENTENO AI API Platform",
-    version="4.3.0"
+    version="4.4.0"
 )
 
 SITE_URL = os.getenv("SITE_URL", "https://americo-ai-web.onrender.com")
@@ -454,6 +454,7 @@ def home():
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="google-site-verification" content="Yo8quOlHsL7cWc6XoIUlURZ_Il6twMGgtK_35PFGhBg" />
   <meta name="google" content="notranslate">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AMERICO AI | CENTENO AI | API Keys with Google Play Billing</title>
@@ -1206,6 +1207,12 @@ def robots_txt():
     return f"""User-agent: *
 Allow: /
 
+Disallow: /admin
+Disallow: /admin/
+Disallow: /admin/login
+Disallow: /admin/api-keys
+Disallow: /api/key/admin/todas
+
 Sitemap: {SITE_URL}/sitemap.xml
 """
 
@@ -1241,6 +1248,7 @@ def health():
         "project": "AMERICO AI WEB PRO ADMIN",
         "product": "CENTENO AI",
         "app_link": APP_LINK,
+        "google_verification": "active",
         "api_key_access": "inside_centeno_ai_with_google_play_billing",
         "api_key_generator": "active",
         "api_base_url": API_BASE_URL,
