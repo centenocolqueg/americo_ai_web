@@ -14,7 +14,7 @@ app = FastAPI(
 )
 
 SITE_URL = os.getenv("SITE_URL", "https://americo-ai-web.onrender.com")
-APP_LINK = os.getenv("APP_LINK", "centenoai://open")
+APP_LINK = os.getenv("APP_LINK", "https://centeno-ai-pro.base44.app")
 
 WHATSAPP_LINK = "https://wa.me/51905917699"
 MAIN_EMAIL = "centenocolqueg@gmail.com"
